@@ -2,7 +2,7 @@
 Official implementation of "Universal Deep Image Compression via Content-Adaptive Optimization with Adapters" presented at WACV 23.
 
 ## Environment
-Use Miniconda.
+Recommend to use Miniconda.
 
 ```bash
 # python=3.8, 3.9, or 3.10 should be fine.
@@ -40,7 +40,7 @@ python run_main.py vector --out results/ours --quality 1
 ```
 
 The refined latent representation is encoded and saved in `cache/`.
-The parameters of the adapters are encoded and saved in `results/ours/wacnn/q1/<image file name>/weights.pt`.
+The adapter parameters are encoded and saved in `results/ours/wacnn/q1/<image file name>/weights.pt`.
 
 ### Evaluation of the Proposed Method
 Perform evaluation using the compressed data obtained in training with the command below.
@@ -122,11 +122,11 @@ Feel free to contact me if there is any question: tsubota (a) hal.t.u-tokyo.ac.j
 ## License
 This code is licensed under MIT (if not specified in the code).
 
-The code contains modified and copied open source code.
+The code contains modified and copied open-source code.
 Thus, I describe the original license of the code.
 Please let me know if there is a license issue with code redistribution.
 If so, I will remove the code and provide the instructions to reproduce the work.
 
-As for the dataset, I do not have any right and provide only URLs.
+As for the dataset, I do not have any rights and provide only URLs.
 Please refer to the original datasets (Kodak and BAM) for the detailed license of the images.
 When the link of some URLs is missing, I will redistribute the corresponding images if they are licensed under Creative Commons.
