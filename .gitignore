@@ -1,0 +1,10 @@
+__pycache__/
+
+# latent
+cache/
+# data
+data/
+# pre-trained weights
+weights/
+# results
+results/
