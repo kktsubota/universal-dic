@@ -26,10 +26,8 @@ python scripts/download_dataset.py
 ### Pre-trained Weights
 Prepare the weights of WACNN pre-trained on natural images.
 
-Note: we cannot provide the `weights.zip` due to the storage limit.
-
 ```bash
-unzip weights.zip
+bash scripts/download_pretrained_models.bash
 ```
 
 ## Usage
