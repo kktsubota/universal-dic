@@ -50,10 +50,12 @@ class WeightEntropyModule(EntropyModel):
         else:
             n_bins = intervals[diff.argmax()]
             # even value
-            self._n_bins = ((n_bins - 1) // 2 + 1) * 2
+            # self._n_bins = ((n_bins - 1) // 2 + 1) * 2
+            self._n_bins = (torch.div(n_bins - 1, 2, rounding_mode="trunc") + 1) * 2
         self._n_bins = self._n_bins.reshape((1,))
 
-        bound = (self._n_bins - 1) // 2
+        # bound = (self._n_bins - 1) // 2
+        bound = torch.div(self._n_bins - 1, 2, rounding_mode="trunc")
         bound = torch.clamp(bound.int(), min=0)
 
         self._offset = -bound
@@ -94,7 +96,8 @@ class WeightEntropyModule(EntropyModel):
 
         symbols: torch.Tensor = torch.round(w / self.width)
         if mode == "symbols":
-            bound: torch.Tensor = (self._n_bins - 1) // 2
+            # bound: torch.Tensor = (self._n_bins - 1) // 2
+            bound: torch.Tensor = torch.div(self._n_bins - 1, 2, rounding_mode="trunc")
             symbols = torch.min(torch.max(symbols, -bound), bound)
             return symbols.int()
         elif mode == "dequantize":

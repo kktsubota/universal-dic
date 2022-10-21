@@ -10,7 +10,7 @@ conda create -n aof python=3.7
 conda activate aof
 # install 7z for [Lam+, ACM MM 20]
 conda install -c bioconda p7zip
-pip install -r requirements.txt
+pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu116
 ```
 
 ## Preparation
