@@ -5,8 +5,8 @@ Official implementation of "Universal Deep Image Compression via Content-Adaptiv
 Recommend to use Miniconda.
 
 ```bash
-# python=3.8, 3.9, or 3.10 should be fine.
-conda create -n aof python=3.7
+# python>=3.6 should be fine.
+conda create -n aof python=3.9
 conda activate aof
 # install 7z for [Lam+, ACM MM 20]
 conda install -c bioconda p7zip
