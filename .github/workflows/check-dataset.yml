@@ -6,7 +6,7 @@ name: Check links of the dataset
 on:
   schedule:
     # run at 1:00 UTC (10:00 JST) on the first day of each month
-    - cron: "00 10 1 * *"
+    - cron: "00 1 1 * *"
 
 permissions:
   contents: read
