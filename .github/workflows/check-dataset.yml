@@ -5,7 +5,7 @@ name: Check links of the dataset
 
 on:
   schedule:
-    # run at 1:00 UTC (10:00 JST) on the first day of month
+    # run at 1:00 UTC (10:00 JST) on the first day of each month
     - cron: "00 10 1 * *"
 
 permissions:
@@ -30,4 +30,4 @@ jobs:
         # if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Check if the links of the images in dataset are valid
       run: |
-        python scripts/check_dataset.py
+        python tests/check_dataset.py
