@@ -21,6 +21,7 @@ Prepare a dataset that consists of four domains: natural images, line drawings, 
 # In 2022/08/31, four files have missing links.
 # the four files: (`156526161`, `99117125`, `15642096`, `158633139`)
 python scripts/download_dataset.py
+python scripts/replace_empty_image.py
 ```
 
 ### Pre-trained Weights
