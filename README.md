@@ -123,8 +123,8 @@ Feel free to contact me if there is any question: tsubota (a) hal.t.u-tokyo.ac.j
 ## License
 This code is licensed under MIT (if not specified in the code).
 
-The code contains modified and copied open-source code.
-Thus, I describe the original license of the code.
+Some part of this code are modified and copied open-source code.
+For the part, I describe the original license.
 Please let me know if there is a license issue with code redistribution.
 If so, I will remove the code and provide the instructions to reproduce the work.
 
