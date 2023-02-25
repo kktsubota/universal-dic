@@ -583,34 +583,26 @@ def evaluate(
 def main(args: argparse.Namespace) -> None:
     def prepare_model_with_adapters(model):
         # if n_adapters = 0 use ZeroLayer -- equivalent with no adapter
-        if args.model == "cheng2020-attn":
+        if args.model in {"cheng2020-attn", "wacnn"}:
             state_dict = model.state_dict()
-            model = Cheng2020AttnAdapter(
-                model.N,
-                args.dim_adapter_1,
-                args.dim_adapter_2,
-                args.groups,
-                connection=args.connection,
-            )
-            info = model.load_state_dict(state_dict, strict=False)
-            print(info)
-            model_qua = QuantizedModelWrapper(model, w_ent, regex=args.regex)
-            # compute diff. from zero
-            for key in model_qua.params_init.keys():
-                if "adapter" in key:
-                    model_qua.params_init[key].fill_(0)
-            model.to(device)
+            if args.model == "cheng2020-attn":
+                model = Cheng2020AttnAdapter(
+                    model.N,
+                    args.dim_adapter_1,
+                    args.dim_adapter_2,
+                    args.groups,
+                    connection=args.connection,
+                )
+            elif args.model == "wacnn":
+                model = WACNNAdapter(
+                    model.N,
+                    model.M,
+                    args.dim_adapter_wacnn[0],
+                    args.dim_adapter_wacnn[1],
+                    args.groups,
+                    position=args.position,
+                )
 
-        elif args.model == "wacnn":
-            state_dict = model.state_dict()
-            model = WACNNAdapter(
-                model.N,
-                model.M,
-                args.dim_adapter_wacnn[0],
-                args.dim_adapter_wacnn[1],
-                args.groups,
-                position=args.position,
-            )
             info = model.load_state_dict(state_dict, strict=False)
             print(info)
             model.to(device)
