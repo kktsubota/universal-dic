@@ -1,4 +1,6 @@
 # Universal Deep Image Compression via Content-Adaptive Optimization with Adapters
+[![Check links of the dataset](https://github.com/kktsubota/universal-dic/actions/workflows/check-dataset.yml/badge.svg)](https://github.com/kktsubota/universal-dic/actions/workflows/check-dataset.yml)
+
 Official implementation of "Universal Deep Image Compression via Content-Adaptive Optimization with Adapters" presented at WACV 23.
 
 ## Environment
