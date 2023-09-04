@@ -492,6 +492,91 @@ def optimize_dec(
         model_qua.update_parameters(model)
 
 
+def optimize_latent_and_dec(
+    model_qua: QuantizedModelWrapper,
+    model: nn.Module,
+    criterion: RateDistortionModelLoss,
+    x: torch.Tensor,
+    x_pad: torch.Tensor,
+    iterations: int,
+    lr: float,
+    lr_2: float,
+) -> tuple:
+    model_qua.eval()
+    model_qua.w_ent.train()
+
+    with torch.no_grad():
+        out_net = forward_enc(model, x_pad)
+
+    out_net["y"].requires_grad_(True)
+    out_net["z"].requires_grad_(True)
+    optimizer, aux_optimizer = configure_optimizers(model, lr_2, 1e-3)
+
+    optimizer.add_param_group({"latent": [out_net["y"], out_net["z"]]})
+    logging.debug(optimizer)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(
+        optimizer, step_size=(iterations * 8 // 10), gamma=0.1
+    )
+    start = time.time()
+
+    # following [Yang+, NeurIPS 20]
+    tau_decay_it = 0
+    tau_decay_factor = 0.001
+
+    _quantize_ent = model.entropy_bottleneck.quantize
+    _quantize_cond = model.gaussian_conditional.quantize
+
+    for it in range(iterations):
+        decaying_iter: int = it - tau_decay_it
+        # if decaying_iter < 0, tau should be 0.5.
+        tau: float = min(0.5, 0.5 * np.exp(-tau_decay_factor * decaying_iter))
+
+        model.entropy_bottleneck.quantize = lambda x, mode, medians=None: quantize_sga(
+            x, tau, medians
+        )
+        model.gaussian_conditional.quantize = (
+            lambda x, mode, medians=None: quantize_sga(x, tau, medians)
+        )
+        optimizer.zero_grad()
+
+        # model weights -> model_qua weights -> loss
+        m_likelihoods = model_qua.update_parameters(model)
+
+        output = forward_dec(model, out_net["y"].clone(), out_net["z"].clone())
+        output["x_hat"] = crop(output["x_hat"], x.shape[2:])
+        output["m_likelihoods"] = m_likelihoods
+        out_criterion: dict = criterion(output, x)
+        out_criterion["loss"].backward()
+        optimizer.step()
+        lr_scheduler.step()
+
+        if (it + 1) % 10 == 0:
+            # loss is much higher at the training time than at the test time
+            # because - y_likelihoods.log2().sum() is large due to additive noise approx.
+            logging.info(
+                "Loss: {:.4f}, Time: {:.2f}s, lr: {}".format(
+                    out_criterion["loss"].item(),
+                    time.time() - start,
+                    optimizer.param_groups[0]["lr"],
+                )
+            )
+
+    model.entropy_bottleneck.quantize = lambda self, x, medians=None: _quantize_ent(
+        self, x, medians
+    )
+    model.gaussian_conditional.quantize = lambda self, x, medians=None: _quantize_cond(
+        self, x, medians
+    )
+
+    out_net["y"].requires_grad_(False)
+    out_net["z"].requires_grad_(False)
+
+    # final update
+    with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
+        model_qua.update_parameters(model)
+    return out_net["y"], out_net["z"]
+
+
 @torch.no_grad()
 def evaluate(
     model_qua: QuantizedModelWrapper,
@@ -729,11 +814,23 @@ def main(args: argparse.Namespace) -> None:
                 args.lr,
             )
         else:
-            raise NotImplementedError
-
+            y, z = optimize_latent_and_dec(
+                model_qua,
+                model,
+                criterion,
+                x,
+                x_pad,
+                args.iterations,
+                args.lr,
+                args.lr_2,
+            )
         model_qua.eval()
         with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
-            x_hat = evaluate(model_qua, x, args.lmbda, actual=True)
+            if args.opt_enc:
+                compressed = dict()
+            else:
+                compressed = encode_latent(model_qua.model, y, z)
+            x_hat = evaluate(model_qua, x, args.lmbda, actual=True, **compressed)
             compressed = model_qua.compress(x_pad)
             torch.save(compressed["weights"], args.out / "weights.pt")
             x_hat = model_qua.decompress(**compressed)["x_hat"]
