@@ -507,7 +507,7 @@ def optimize_latent_and_dec(
 
     out_net["y"].requires_grad_(True)
     out_net["z"].requires_grad_(True)
-    optimizer, aux_optimizer = configure_optimizers(model, lr_2, 1e-3, model_qua.regex)
+    optimizer, _ = configure_optimizers(model, lr_2, 1e-3, model_qua.regex)
 
     param_group = copy.deepcopy(optimizer.param_groups[0])
     param_group["params"] = [out_net["y"], out_net["z"]]

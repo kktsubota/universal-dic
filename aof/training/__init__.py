@@ -36,12 +36,18 @@ def configure_optimizers(net, lr: float, aux_lr: float, regex=None):
         logging.info(parameters)
         logging.info(aux_parameters)
 
-    optimizer = torch.optim.Adam(
-        (params_dict[n] for n in sorted(parameters)),
-        lr=lr,
-    )
-    aux_optimizer = torch.optim.Adam(
-        (params_dict[n] for n in sorted(aux_parameters)),
-        lr=aux_lr,
-    )
+    if len(parameters) == 0:
+        optimizer = None
+    else:
+        optimizer = torch.optim.Adam(
+            (params_dict[n] for n in sorted(parameters)),
+            lr=lr,
+        )
+    if len(aux_parameters) == 0:
+        aux_optimizer = None
+    else:
+        aux_optimizer = torch.optim.Adam(
+            (params_dict[n] for n in sorted(aux_parameters)),
+            lr=aux_lr,
+        )
     return optimizer, aux_optimizer
