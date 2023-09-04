@@ -448,9 +448,6 @@ def optimize_dec(
     z=None,
     y_hat=None,
 ) -> None:
-    model_qua.eval()
-    model_qua.w_ent.train()
-
     optimizer, aux_optimizer = configure_optimizers(model, lr, 1e-3)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(
         optimizer, step_size=(iterations * 8 // 10), gamma=0.1
@@ -593,8 +590,6 @@ def evaluate(
     strings=None,
     shape=None,
 ) -> torch.Tensor:
-    model_qua.eval()
-
     if actual:
         if model_qua.w_ent.width != 0:
             psnr, bpp, bpp_m, mse, x_hat = test(
@@ -748,6 +743,7 @@ def main(args: argparse.Namespace) -> None:
         model, w_ent, regex=args.regex if args.opt_enc else "none"
     )
     model_qua.report_params()
+    model_qua.eval()
     x_hat = evaluate(model_qua, x, args.lmbda, actual=True)
     transforms.ToPILImage()(x[0]).save(args.out / "input.png")
     transforms.ToPILImage()(x_hat[0]).save(args.out / "init.png")
@@ -764,6 +760,8 @@ def main(args: argparse.Namespace) -> None:
         model_qua.train()
         model_qua.eval_enc()
 
+        model_qua.eval()
+        model_qua.w_ent.train()
         optimize_dec(
             model_qua,
             model,
@@ -775,6 +773,7 @@ def main(args: argparse.Namespace) -> None:
         )
 
         with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
+            model_qua.eval()
             x_hat = evaluate(
                 model_qua,
                 x,
@@ -797,6 +796,7 @@ def main(args: argparse.Namespace) -> None:
         with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
             compressed = encode_latent(model_qua.model, y, z)
             torch.save(compressed, args.out / "compressed.pt")
+            model_qua.eval()
             x_hat = evaluate(model_qua, x, args.lmbda, actual=True, **compressed)
             transforms.ToPILImage()(x_hat[0]).save(args.out / "opt_2.png")
         return
@@ -833,6 +833,7 @@ def main(args: argparse.Namespace) -> None:
                 compressed = dict()
             else:
                 compressed = encode_latent(model_qua.model, y, z)
+            model_qua.eval()
             x_hat = evaluate(model_qua, x, args.lmbda, actual=True, **compressed)
             compressed = model_qua.compress(x_pad)
             torch.save(compressed["weights"], args.out / "weights.pt")
@@ -862,6 +863,7 @@ def main(args: argparse.Namespace) -> None:
     with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
         y_hat = decode_latent(model_qua.model, **compressed)
         y_hat.requires_grad_(False)
+        model_qua.eval()
         x_hat = evaluate(model_qua, x, args.lmbda, actual=True, **compressed)
         transforms.ToPILImage()(x_hat[0]).save(args.out / "opt.png")
 
@@ -874,6 +876,8 @@ def main(args: argparse.Namespace) -> None:
     model_qua.train()
     model_qua.eval_enc()
 
+    model_qua.eval()
+    model_qua.w_ent.train()
     optimize_dec(
         model_qua,
         model,
@@ -884,6 +888,7 @@ def main(args: argparse.Namespace) -> None:
         y_hat=y_hat,
     )
     with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
+        model_qua.eval()
         x_hat = evaluate(
             model_qua,
             x,
