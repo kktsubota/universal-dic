@@ -557,11 +557,11 @@ def optimize_latent_and_dec(
             # loss is much higher at the training time than at the test time
             # because - y_likelihoods.log2().sum() is large due to additive noise approx.
             logging.info(
-                "Loss: {:.4f}, Time: {:.2f}s, lr: {}, lr_2: {}".format(
+                "Loss: {:.4f}, Time: {:.2f}s, lr (latent): {}, lr (adapter): {}".format(
                     out_criterion["loss"].item(),
                     time.time() - start,
-                    optimizer.param_groups[0]["lr"],
                     optimizer.param_groups[1]["lr"],
+                    optimizer.param_groups[0]["lr"],
                 )
             )
 
