@@ -513,7 +513,9 @@ def optimize_latent_and_dec(
     param_group["params"] = [out_net["y"], out_net["z"]]
     param_group["lr"] = lr
     optimizer.add_param_group(param_group)
-    logging.info(param_group)
+    for param_group in optimizer.param_groups:
+        logging.info([param.shape for param in param_group["params"]])
+        logging.info("lr = {}".format(param_group["lr"]))
 
     lr_scheduler = torch.optim.lr_scheduler.StepLR(
         optimizer, step_size=(iterations * 8 // 10), gamma=0.1
