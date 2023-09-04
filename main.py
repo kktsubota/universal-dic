@@ -664,6 +664,7 @@ def evaluate(
 
 
 def main(args: argparse.Namespace) -> None:
+    @torch.no_grad()
     def prepare_model_with_adapters(model):
         # if n_adapters = 0 use ZeroLayer -- equivalent with no adapter
         if args.model in {"cheng2020-attn", "wacnn"}:
@@ -755,7 +756,8 @@ def main(args: argparse.Namespace) -> None:
             y_hat = decode_latent(model, **compressed)
             y_hat.requires_grad_(False)
             y_hat = y_hat.to(device)
-            model, model_qua = prepare_model_with_adapters(model)
+
+        model, model_qua = prepare_model_with_adapters(model)
 
         model_qua.eval()
         model_qua.w_ent.train()
@@ -813,6 +815,10 @@ def main(args: argparse.Namespace) -> None:
                 args.lr,
             )
         else:
+            model, model_qua = prepare_model_with_adapters(model)
+            # encoder and entropy models are in evaluation mode.
+            model_qua.eval()
+            model_qua.w_ent.train()
             y, z = optimize_latent_and_dec(
                 model_qua,
                 model,
