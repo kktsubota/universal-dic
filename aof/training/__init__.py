@@ -1,9 +1,12 @@
+import logging
+import re
+
 import torch
 
 
 # modified from https://github.com/InterDigitalInc/CompressAI/blob/master/examples/train.py
 # Copyright (c) 2021-2022 InterDigital Communications, Inc Licensed under BSD 3-Clause Clear License.
-def configure_optimizers(net, lr: float, aux_lr: float):
+def configure_optimizers(net, lr: float, aux_lr: float, regex=None):
     """Separate parameters for the main optimizer and the auxiliary optimizer.
     Return two optimizers"""
 
@@ -25,6 +28,13 @@ def configure_optimizers(net, lr: float, aux_lr: float):
 
     assert len(inter_params) == 0
     assert len(union_params) - len(params_dict.keys()) == 0
+
+    if regex is not None:
+        logging.info(f"filter parameters by regex={regex}")
+        parameters = {n for n in parameters if re.match(regex, n) is not None}
+        aux_parameters = {n for n in aux_parameters if re.match(regex, n) is not None}
+        logging.info(parameters)
+        logging.info(aux_parameters)
 
     optimizer = torch.optim.Adam(
         (params_dict[n] for n in sorted(parameters)),
