@@ -757,9 +757,6 @@ def main(args: argparse.Namespace) -> None:
             y_hat = y_hat.to(device)
             model, model_qua = prepare_model_with_adapters(model)
 
-        model_qua.train()
-        model_qua.eval_enc()
-
         model_qua.eval()
         model_qua.w_ent.train()
         optimize_dec(
@@ -772,8 +769,8 @@ def main(args: argparse.Namespace) -> None:
             y_hat=y_hat,
         )
 
+        model_qua.eval()
         with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
-            model_qua.eval()
             x_hat = evaluate(
                 model_qua,
                 x,
@@ -796,7 +793,6 @@ def main(args: argparse.Namespace) -> None:
         with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
             compressed = encode_latent(model_qua.model, y, z)
             torch.save(compressed, args.out / "compressed.pt")
-            model_qua.eval()
             x_hat = evaluate(model_qua, x, args.lmbda, actual=True, **compressed)
             transforms.ToPILImage()(x_hat[0]).save(args.out / "opt_2.png")
         return
@@ -833,7 +829,6 @@ def main(args: argparse.Namespace) -> None:
                 compressed = dict()
             else:
                 compressed = encode_latent(model_qua.model, y, z)
-            model_qua.eval()
             x_hat = evaluate(model_qua, x, args.lmbda, actual=True, **compressed)
             compressed = model_qua.compress(x_pad)
             torch.save(compressed["weights"], args.out / "weights.pt")
@@ -873,9 +868,6 @@ def main(args: argparse.Namespace) -> None:
     model, model_qua = prepare_model_with_adapters(model)
 
     # encoder and entropy models are in evaluation mode.
-    model_qua.train()
-    model_qua.eval_enc()
-
     model_qua.eval()
     model_qua.w_ent.train()
     optimize_dec(
@@ -887,8 +879,8 @@ def main(args: argparse.Namespace) -> None:
         args.lr_2,
         y_hat=y_hat,
     )
+    model_qua.eval()
     with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
-        model_qua.eval()
         x_hat = evaluate(
             model_qua,
             x,
