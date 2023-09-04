@@ -751,14 +751,18 @@ def main(args: argparse.Namespace) -> None:
     transforms.ToPILImage()(x[0]).save(args.out / "input.png")
     transforms.ToPILImage()(x_hat[0]).save(args.out / "init.png")
 
+    model_qua.train()
+    model_qua.update_ent(force=True)
+
     if args.pipeline == "swap":
+        del model_qua
+
         model.eval()
         with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
             compressed = model.compress(x_pad)
             y_hat = decode_latent(model, **compressed)
             y_hat.requires_grad_(False)
             y_hat = y_hat.to(device)
-
         model, model_qua = prepare_model_with_adapters(model)
 
         model_qua.eval()
@@ -801,10 +805,7 @@ def main(args: argparse.Namespace) -> None:
             transforms.ToPILImage()(x_hat[0]).save(args.out / "opt_2.png")
         return
 
-    model_qua.train()
-    model_qua.update_ent(force=True)
-
-    if args.pipeline == "end2end":
+    elif args.pipeline == "end2end":
         # implementation for [Rozendaal+, ICLR 21]
         if args.opt_enc:
             optimize(
@@ -817,6 +818,8 @@ def main(args: argparse.Namespace) -> None:
                 args.lr,
             )
         else:
+            del model_qua
+    
             model, model_qua = prepare_model_with_adapters(model)
             # encoder and entropy models are in evaluation mode.
             model_qua.eval()
