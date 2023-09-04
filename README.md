@@ -107,8 +107,8 @@ python decode.py --weight_root results-abl/ours-omp --n-dim-2 -1 --groups 192
 * Optimization Order
 
 ```bash
-python run_main.py vector --out results-abl/ours-swap --swap --quality 1
-python decode.py --weight_root results-abl/ours-swap --swap
+python run_main.py vector --out results-abl/ours-swap --pipeline swap --quality 1
+python decode.py --weight_root results-abl/ours-swap --pipeline swap
 ```
 
 * Another Base Network Architecture

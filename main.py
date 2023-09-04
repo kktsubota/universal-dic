@@ -284,7 +284,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("path", type=Path)
     parser.add_argument("--quality", type=int, default=1)
     parser.add_argument("--opt-enc", action="store_true", default=False)
-    parser.add_argument("--swap", action="store_true", default=False)
+    parser.add_argument("--pipeline", default="default", choices={"default", "swap"})
     parser.add_argument("--model", type=str, default="wacnn")
     parser.add_argument("--model_path", default=None)
     parser.add_argument("--lmbda", type=float, required=True)
@@ -664,7 +664,7 @@ def main(args: argparse.Namespace) -> None:
     transforms.ToPILImage()(x[0]).save(args.out / "input.png")
     transforms.ToPILImage()(x_hat[0]).save(args.out / "init.png")
 
-    if args.swap:
+    if args.pipeline == "swap":
         model.eval()
         with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
             compressed = model.compress(x_pad)
