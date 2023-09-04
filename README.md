@@ -69,7 +69,7 @@ python run_main.py vector --out results/lam-mm20 --regex "'g_s\..*\.bias'" --n-d
 python decode.py --weight_root results/lam-mm20 --n-dim-2 0 --width 0.0 --regex "g_s\..*\.bias" --data_type float64+7z
 
 # [Rozendaal+, ICLR 21]
-python run_main.py vector --out results/rozendaal-iclr21 --regex "'.*'" --n-dim 0 --width 0.005 --alpha 1000 --sigma 0.05 --distrib spike-and-slab --lr 3e-5 --opt-enc --quality 1
+python run_main.py vector --out results/rozendaal-iclr21 --regex "'.*'" --n-dim 0 --width 0.005 --alpha 1000 --sigma 0.05 --distrib spike-and-slab --lr 3e-5 --opt-enc --pipeline end2end --quality 1
 python decode.py --weight_root results/rozendaal-iclr21 --rozendaal
 
 # [Zou+, ISM 21]

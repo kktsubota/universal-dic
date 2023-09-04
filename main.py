@@ -284,7 +284,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("path", type=Path)
     parser.add_argument("--quality", type=int, default=1)
     parser.add_argument("--opt-enc", action="store_true", default=False)
-    parser.add_argument("--pipeline", default="default", choices={"default", "swap"})
+    parser.add_argument("--pipeline", default="default", choices={"default", "swap", "end2end"})
     parser.add_argument("--model", type=str, default="wacnn")
     parser.add_argument("--model_path", default=None)
     parser.add_argument("--lmbda", type=float, required=True)
@@ -716,17 +716,20 @@ def main(args: argparse.Namespace) -> None:
     model_qua.train()
     model_qua.update_ent(force=True)
 
-    # implementation for [Rozendaal+, ICLR 21]
-    if args.opt_enc:
-        optimize(
-            model_qua,
-            model,
-            criterion,
-            x,
-            x_pad,
-            args.iterations,
-            args.lr,
-        )
+    if args.pipeline == "end2end":
+        # implementation for [Rozendaal+, ICLR 21]
+        if args.opt_enc:
+            optimize(
+                model_qua,
+                model,
+                criterion,
+                x,
+                x_pad,
+                args.iterations,
+                args.lr,
+            )
+        else:
+            raise NotImplementedError
 
         model_qua.eval()
         with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
