@@ -512,8 +512,10 @@ def optimize_latent_and_dec(
     out_net["z"].requires_grad_(True)
     optimizer, aux_optimizer = configure_optimizers(model, lr_2, 1e-3)
 
-    optimizer.add_param_group({"latent": [out_net["y"], out_net["z"]]})
-    logging.debug(optimizer)
+    param_group = copy.deepcopy(optimizer.param_groups[0])
+    param_group["params"] = [out_net["y"], out_net["z"]]
+    param_group["lr"] = lr
+    optimizer.add_param_group(param_group)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(
         optimizer, step_size=(iterations * 8 // 10), gamma=0.1
     )
@@ -554,10 +556,11 @@ def optimize_latent_and_dec(
             # loss is much higher at the training time than at the test time
             # because - y_likelihoods.log2().sum() is large due to additive noise approx.
             logging.info(
-                "Loss: {:.4f}, Time: {:.2f}s, lr: {}".format(
+                "Loss: {:.4f}, Time: {:.2f}s, lr: {}, lr_2: {}".format(
                     out_criterion["loss"].item(),
                     time.time() - start,
                     optimizer.param_groups[0]["lr"],
+                    optimizer.param_groups[1]["lr"],
                 )
             )
 
