@@ -843,7 +843,8 @@ def main(args: argparse.Namespace) -> None:
             x_hat = evaluate(model_qua, x, args.lmbda, actual=True, **compressed)
             compressed = model_qua.compress(x_pad)
             torch.save(compressed["weights"], args.out / "weights.pt")
-            x_hat = model_qua.decompress(**compressed)["x_hat"]
+            out_dict = model_qua.decompress(**compressed)
+            x_hat = crop(out_dict["x_hat"], x.shape[2:])
             print(-10 * (x - x_hat.mul(255).round().div(255)).square().mean().log10())
             compressed.pop("weights")
             torch.save(compressed, args.out / "latent.pt")
