@@ -105,11 +105,13 @@ class QuantizedModelWrapper:
             self.params_init[key] = self.params_init[key].to(device)
 
     @torch.no_grad()
-    def compress(self, x_pad: torch.Tensor, y=None, z=None) -> dict:
+    def compress(self, x_pad=None, y=None, z=None) -> dict:
         if y is not None and z is not None:
-            compressed = encode_latent(self, y, z)
-        else:
+            compressed = encode_latent(self.model, y, z)
+        elif x_pad is not None:
             compressed = self.model.compress(x_pad)
+        else:
+            raise RuntimeError("x_pad is None and y or  z are None.")
         compressed["weights"] = self.compress_weight()
         return compressed
 
@@ -222,8 +224,7 @@ def test(
                     "weights": model_qua.compress_weight(),
                 }
             elif y is not None and z is not None:
-                # x_ is not accessed
-                c = model_qua.compress(x_, y, z)
+                c = model_qua.compress(y=y, z=z)
             else:
                 c = model_qua.compress(x_)
             out_dict = model_qua.decompress(**c)
@@ -448,10 +449,7 @@ def optimize_dec(
     z=None,
     y_hat=None,
 ) -> None:
-    model_qua.eval()
-    model_qua.w_ent.train()
-
-    optimizer, aux_optimizer = configure_optimizers(model, lr, 1e-3)
+    optimizer, _ = configure_optimizers(model, lr, 1e-3, regex=model_qua.regex)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(
         optimizer, step_size=(iterations * 8 // 10), gamma=0.1
     )
@@ -492,6 +490,98 @@ def optimize_dec(
         model_qua.update_parameters(model)
 
 
+def optimize_latent_and_dec(
+    model_qua: QuantizedModelWrapper,
+    model: nn.Module,
+    criterion: RateDistortionModelLoss,
+    x: torch.Tensor,
+    x_pad: torch.Tensor,
+    iterations: int,
+    lr: float,
+    lr_2: float,
+) -> tuple:
+    model_qua.eval()
+    model_qua.w_ent.train()
+
+    with torch.no_grad():
+        out_net = forward_enc(model, x_pad)
+
+    out_net["y"].requires_grad_(True)
+    out_net["z"].requires_grad_(True)
+    optimizer, _ = configure_optimizers(model, lr_2, 1e-3, model_qua.regex)
+
+    param_group = copy.deepcopy(optimizer.param_groups[0])
+    param_group["params"] = [out_net["y"], out_net["z"]]
+    param_group["lr"] = lr
+    optimizer.add_param_group(param_group)
+    for param_group in optimizer.param_groups:
+        logging.info([param.shape for param in param_group["params"]])
+        logging.info("lr = {}".format(param_group["lr"]))
+
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(
+        optimizer, step_size=(iterations * 8 // 10), gamma=0.1
+    )
+    start = time.time()
+
+    # following [Yang+, NeurIPS 20]
+    tau_decay_it = 0
+    tau_decay_factor = 0.001
+
+    _quantize_ent = model.entropy_bottleneck.quantize
+    _quantize_cond = model.gaussian_conditional.quantize
+
+    for it in range(iterations):
+        decaying_iter: int = it - tau_decay_it
+        # if decaying_iter < 0, tau should be 0.5.
+        tau: float = min(0.5, 0.5 * np.exp(-tau_decay_factor * decaying_iter))
+
+        model.entropy_bottleneck.quantize = lambda x, mode, medians=None: quantize_sga(
+            x, tau, medians
+        )
+        model.gaussian_conditional.quantize = (
+            lambda x, mode, medians=None: quantize_sga(x, tau, medians)
+        )
+        optimizer.zero_grad()
+
+        # model weights -> model_qua weights -> loss
+        m_likelihoods = model_qua.update_parameters(model)
+
+        output = forward_dec(model, out_net["y"].clone(), out_net["z"].clone())
+        output["x_hat"] = crop(output["x_hat"], x.shape[2:])
+        output["m_likelihoods"] = m_likelihoods
+        out_criterion: dict = criterion(output, x)
+        out_criterion["loss"].backward()
+        optimizer.step()
+        lr_scheduler.step()
+
+        if (it + 1) % 10 == 0:
+            # loss is much higher at the training time than at the test time
+            # because - y_likelihoods.log2().sum() is large due to additive noise approx.
+            logging.info(
+                "Loss: {:.4f}, Time: {:.2f}s, lr (latent): {}, lr (adapter): {}".format(
+                    out_criterion["loss"].item(),
+                    time.time() - start,
+                    optimizer.param_groups[1]["lr"],
+                    optimizer.param_groups[0]["lr"],
+                )
+            )
+
+    model.entropy_bottleneck.quantize = lambda self, x, medians=None: _quantize_ent(
+        self, x, medians
+    )
+    model.gaussian_conditional.quantize = lambda self, x, medians=None: _quantize_cond(
+        self, x, medians
+    )
+
+    out_net["y"].requires_grad_(False)
+    out_net["z"].requires_grad_(False)
+
+    # final update
+    with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
+        model_qua.update_parameters(model)
+    return out_net["y"], out_net["z"]
+
+
 @torch.no_grad()
 def evaluate(
     model_qua: QuantizedModelWrapper,
@@ -505,8 +595,6 @@ def evaluate(
     strings=None,
     shape=None,
 ) -> torch.Tensor:
-    model_qua.eval()
-
     if actual:
         if model_qua.w_ent.width != 0:
             psnr, bpp, bpp_m, mse, x_hat = test(
@@ -581,6 +669,7 @@ def evaluate(
 
 
 def main(args: argparse.Namespace) -> None:
+    @torch.no_grad()
     def prepare_model_with_adapters(model):
         # if n_adapters = 0 use ZeroLayer -- equivalent with no adapter
         if args.model in {"cheng2020-attn", "wacnn"}:
@@ -660,22 +749,27 @@ def main(args: argparse.Namespace) -> None:
         model, w_ent, regex=args.regex if args.opt_enc else "none"
     )
     model_qua.report_params()
+    model_qua.eval()
     x_hat = evaluate(model_qua, x, args.lmbda, actual=True)
     transforms.ToPILImage()(x[0]).save(args.out / "input.png")
     transforms.ToPILImage()(x_hat[0]).save(args.out / "init.png")
 
+    model_qua.train()
+    model_qua.update_ent(force=True)
+
     if args.pipeline == "swap":
+        del model_qua
+
         model.eval()
         with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
             compressed = model.compress(x_pad)
             y_hat = decode_latent(model, **compressed)
             y_hat.requires_grad_(False)
             y_hat = y_hat.to(device)
-            model, model_qua = prepare_model_with_adapters(model)
+        model, model_qua = prepare_model_with_adapters(model)
 
-        model_qua.train()
-        model_qua.eval_enc()
-
+        model_qua.eval()
+        model_qua.w_ent.train()
         optimize_dec(
             model_qua,
             model,
@@ -686,6 +780,7 @@ def main(args: argparse.Namespace) -> None:
             y_hat=y_hat,
         )
 
+        model_qua.eval()
         with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
             x_hat = evaluate(
                 model_qua,
@@ -713,10 +808,7 @@ def main(args: argparse.Namespace) -> None:
             transforms.ToPILImage()(x_hat[0]).save(args.out / "opt_2.png")
         return
 
-    model_qua.train()
-    model_qua.update_ent(force=True)
-
-    if args.pipeline == "end2end":
+    elif args.pipeline == "end2end":
         # implementation for [Rozendaal+, ICLR 21]
         if args.opt_enc:
             optimize(
@@ -729,19 +821,35 @@ def main(args: argparse.Namespace) -> None:
                 args.lr,
             )
         else:
-            raise NotImplementedError
-
+            del model_qua
+    
+            model, model_qua = prepare_model_with_adapters(model)
+            # encoder and entropy models are in evaluation mode.
+            model_qua.eval()
+            model_qua.w_ent.train()
+            y, z = optimize_latent_and_dec(
+                model_qua,
+                model,
+                criterion,
+                x,
+                x_pad,
+                args.iterations,
+                args.lr,
+                args.lr_2,
+            )
         model_qua.eval()
         with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
-            x_hat = evaluate(model_qua, x, args.lmbda, actual=True)
-            compressed = model_qua.compress(x_pad)
+            if args.opt_enc:
+                compressed = model_qua.compress(x_pad)
+            else:
+                compressed = model_qua.compress(y=y, z=z)
+
+            x_hat = evaluate(model_qua, x, args.lmbda, actual=True, strings=compressed["strings"], shape=compressed["shape"])
             torch.save(compressed["weights"], args.out / "weights.pt")
-            x_hat = model_qua.decompress(**compressed)["x_hat"]
-            print(-10 * (x - x_hat.mul(255).round().div(255)).square().mean().log10())
             compressed.pop("weights")
             torch.save(compressed, args.out / "latent.pt")
             transforms.ToPILImage()(x_hat[0]).save(args.out / "opt.png")
-            return
+        return
 
     cache_root: Path = Path("cache")
     cache_root.mkdir(parents=True, exist_ok=True)
@@ -762,6 +870,7 @@ def main(args: argparse.Namespace) -> None:
     with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
         y_hat = decode_latent(model_qua.model, **compressed)
         y_hat.requires_grad_(False)
+        model_qua.eval()
         x_hat = evaluate(model_qua, x, args.lmbda, actual=True, **compressed)
         transforms.ToPILImage()(x_hat[0]).save(args.out / "opt.png")
 
@@ -771,9 +880,8 @@ def main(args: argparse.Namespace) -> None:
     model, model_qua = prepare_model_with_adapters(model)
 
     # encoder and entropy models are in evaluation mode.
-    model_qua.train()
-    model_qua.eval_enc()
-
+    model_qua.eval()
+    model_qua.w_ent.train()
     optimize_dec(
         model_qua,
         model,
@@ -783,6 +891,7 @@ def main(args: argparse.Namespace) -> None:
         args.lr_2,
         y_hat=y_hat,
     )
+    model_qua.eval()
     with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
         x_hat = evaluate(
             model_qua,

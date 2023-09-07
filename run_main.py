@@ -40,7 +40,7 @@ def main():
     parser.add_argument("--iteration_2", type=int, default=500)
     parser.add_argument("--connection", type=str, default="serial")
     parser.add_argument("--position", type=str, default="last")
-    parser.add_argument("--swap", action="store_true", default=False)
+    parser.add_argument("--pipeline", default="default", choices={"default", "swap", "end2end"})
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -172,9 +172,9 @@ def main():
             args.data_type,
             "--out",
             out.as_posix(),
+            "--pipeline",
+            args.pipeline,
         ]
-        if args.swap:
-            cmd += ["--swap"]
         if args.opt_enc:
             cmd += ["--opt-enc"]
         if args.dry_run:
