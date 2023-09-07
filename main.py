@@ -105,11 +105,13 @@ class QuantizedModelWrapper:
             self.params_init[key] = self.params_init[key].to(device)
 
     @torch.no_grad()
-    def compress(self, x_pad: torch.Tensor, y=None, z=None) -> dict:
+    def compress(self, x_pad=None, y=None, z=None) -> dict:
         if y is not None and z is not None:
-            compressed = encode_latent(self, y, z)
-        else:
+            compressed = encode_latent(self.model, y, z)
+        elif x_pad is not None:
             compressed = self.model.compress(x_pad)
+        else:
+            raise RuntimeError("x_pad is None and y or  z are None.")
         compressed["weights"] = self.compress_weight()
         return compressed
 
@@ -222,8 +224,7 @@ def test(
                     "weights": model_qua.compress_weight(),
                 }
             elif y is not None and z is not None:
-                # x_ is not accessed
-                c = model_qua.compress(x_, y, z)
+                c = model_qua.compress(y=y, z=z)
             else:
                 c = model_qua.compress(x_)
             out_dict = model_qua.decompress(**c)
@@ -839,19 +840,16 @@ def main(args: argparse.Namespace) -> None:
         model_qua.eval()
         with torch.no_grad(), torch.backends.cudnn.flags(**CUDNN_INFERENCE_FLAGS):
             if args.opt_enc:
-                compressed = dict()
+                compressed = model_qua.compress(x_pad)
             else:
-                compressed = encode_latent(model_qua.model, y, z)
-            x_hat = evaluate(model_qua, x, args.lmbda, actual=True, **compressed)
-            compressed = model_qua.compress(x_pad)
+                compressed = model_qua.compress(y=y, z=z)
+
+            x_hat = evaluate(model_qua, x, args.lmbda, actual=True, strings=compressed["strings"], shape=compressed["shape"])
             torch.save(compressed["weights"], args.out / "weights.pt")
-            out_dict = model_qua.decompress(**compressed)
-            x_hat = crop(out_dict["x_hat"], x.shape[2:])
-            print(-10 * (x - x_hat.mul(255).round().div(255)).square().mean().log10())
             compressed.pop("weights")
             torch.save(compressed, args.out / "latent.pt")
             transforms.ToPILImage()(x_hat[0]).save(args.out / "opt.png")
-            return
+        return
 
     cache_root: Path = Path("cache")
     cache_root.mkdir(parents=True, exist_ok=True)
