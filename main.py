@@ -449,7 +449,7 @@ def optimize_dec(
     z=None,
     y_hat=None,
 ) -> None:
-    optimizer, aux_optimizer = configure_optimizers(model, lr, 1e-3)
+    optimizer, _ = configure_optimizers(model, lr, 1e-3, regex=model_qua.regex)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(
         optimizer, step_size=(iterations * 8 // 10), gamma=0.1
     )
