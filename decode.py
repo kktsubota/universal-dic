@@ -42,7 +42,7 @@ def main():
     parser.add_argument("--n-dim-2", type=int, default=2)
     parser.add_argument("--groups", type=int, default=1)
     parser.add_argument("--position", type=str, default="last")
-    parser.add_argument("--swap", action="store_true", default=False)
+    parser.add_argument("--pipeline", default="default", choices={"default", "swap", "end2end"})
     parser.add_argument("--regex", default="g_s\.5\.adapter.*")
     parser.add_argument("--save-image", action="store_true", default=False)
     args = parser.parse_args()
@@ -59,6 +59,7 @@ def main():
         args.distrib = "spike-and-slab"
         args.regex = ".*"
         args.stage = "2nd"
+        args.pipeline = "end2end"
 
     device = "cuda"
     for quality in range(1, 7):
@@ -131,9 +132,9 @@ def main():
             n_pixels = x.shape[2] * x.shape[3]
 
             # decode
-            if args.swap:
+            if args.pipeline == "swap":
                 cache_path: Path = data_path / "compressed.pt"
-            elif args.rozendaal:
+            elif args.pipeline == "end2end":
                 cache_path: Path = data_path / "latent.pt"
             else:
                 cache_path: Path = (
